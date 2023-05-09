@@ -10,6 +10,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
@@ -19,65 +20,97 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
+import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 
 
 @Configuration
+@EnableWebSecurity
+//@EnableGlobalMethodSecurity( prePostEnabled = true )
 public class SecurityConfig {
-
 
     @Bean
 	PasswordEncoder passwordEncoder (){
 		return new BCryptPasswordEncoder( );
 	}
-
-
     /*
      * Credenciales "Basic Auth" para el URI "/actuator"
      */
     @Bean
-	SecurityFilterChain actuatorFilterChain ( HttpSecurity http, AuthenticationManager actuatorAuthManager ) throws Exception
+	@Order(2)
+	SecurityFilterChain actuatorFilterChain ( HttpSecurity http ) throws Exception
 	{
 		http
-			.csrf().disable() // Inhabilitar cookies
-			.authorizeRequests() // Reglas de Peticiones
-			// Incluye "/actuator" de la autenticación básica
-			//.antMatchers("/actuator/**").authenticated() hasAuthority("ACTUATOR")
-			.antMatchers("/actuator/**").hasAuthority("ACTUATOR")
-             // Para las demas debe estar autenticado
+			.csrf().disable()
+			.authorizeRequests()
+			//.antMatchers("/actuator/**").hasAuthority("ACTUATOR")
+			.antMatchers("/actuator/**").hasRole("ACTUATOR")
 			.anyRequest().authenticated()
-			.and().httpBasic() // Basic Auth
+			.and().httpBasic()
 			.and()
-			.sessionManagement() // Politica de Session SIN estado:
+			.sessionManagement()
 			.sessionCreationPolicy( SessionCreationPolicy.STATELESS );
-			//.and().build();
         http.authenticationProvider(actuatorAuthProvider());
         return http.build();
-	}
-
-	
+	}  /*   */
     /*
      * Credenciales "Basic Auth" para todas las demás URIs (excluyendo "/actuator")
      */
     @Bean
-	SecurityFilterChain filterChain ( HttpSecurity http, AuthenticationManager userAuthManager ) throws Exception
+	@Order(1)
+	SecurityFilterChain filterChain ( HttpSecurity http ) throws Exception
 	{
 		http
-			.csrf().disable() // Inhabilitar cookies
-			.authorizeRequests() // Reglas de Peticiones
-			// Excluye "/actuator" de la autenticación básica
-			//.antMatchers("/actuator/**").permitAll()
-			.antMatchers("/actuator/**").permitAll()
-             // Para las demas debe estar autenticado
+			.csrf().disable()
+			.authorizeRequests()
+			.antMatchers("/**").permitAll()
 			.anyRequest().authenticated()
-			.and().httpBasic() // Basic Auth
+			.and().httpBasic()
 			.and()
-			.sessionManagement() // Politica de Session SIN estado:
+			.sessionManagement()
 			.sessionCreationPolicy( SessionCreationPolicy.STATELESS );
-			//.and().build();
         http.authenticationProvider(userAuthProvider());
         return http.build();
 	}
+	/*     */
+	
+
+	/* 
+	@Bean
+    @Order(1)
+    public SecurityFilterChain actuatorWebSecurity(HttpSecurity http) throws Exception {
+        http.requestMatchers((matchers) -> matchers
+			.antMatchers("/actuator/**"))
+			.authorizeRequests((requests) -> requests.anyRequest().authenticated())
+			.httpBasic() ;
+			//.and().formLogin();
+		http.authenticationProvider(actuatorAuthProvider());
+        return http.build();
+    }
+
+    @Bean
+	@Order(2)
+    public SecurityFilterChain webSecurity(HttpSecurity http) throws Exception {
+        http.requestMatchers((matchers) -> matchers
+			.antMatchers("/**"))
+			.authorizeRequests(
+				(requests) -> requests.anyRequest().authenticated()
+			)
+			.httpBasic()
+			//.and().formLogin()
+			.and()
+			.exceptionHandling( exception -> { 				
+				System.out.println(".................................................. Errror: "); 
+				System.out.println( exception );
+			}
+			);
+			//.authenticationEntryPoint( userAuthenticationErrorHandler() ) ;
+			//.accessDeniedHandler(new UserForbiddenErrorHandler()));
+
+		http.authenticationProvider(userAuthProvider());
+        return http.build();
+    }
+	*/
 
 
     @Bean
@@ -88,7 +121,6 @@ public class SecurityConfig {
         return authProvider;
     }
 
-
     @Bean
     public DaoAuthenticationProvider actuatorAuthProvider() {
         DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
@@ -96,7 +128,6 @@ public class SecurityConfig {
         authProvider.setPasswordEncoder(passwordEncoder());
         return authProvider;
     }
-
 
     @Bean
 	@Primary
@@ -109,6 +140,7 @@ public class SecurityConfig {
     }
 
     @Bean
+	//@Primary
 	public AuthenticationManager actuatorAuthManager( HttpSecurity http ) throws Exception {
         return http.getSharedObject( AuthenticationManagerBuilder.class )
 			.userDetailsService( actuatorDetailsService() )
@@ -116,9 +148,6 @@ public class SecurityConfig {
 			.and()
 			.build();
     }
-
-
-
     /* 
     * Crendenciales en "Memoria" del usuario "admin"
     */
@@ -133,8 +162,6 @@ public class SecurityConfig {
 		);
 		return umanager;
 	}
-
-
     /* 
     * Crendenciales en "Memoria" del usuario "actuator"
     */
@@ -149,8 +176,4 @@ public class SecurityConfig {
 		);
 		return umanager;
 	}
-
-
-    
-
 }
